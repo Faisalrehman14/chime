@@ -72,8 +72,14 @@ def _redirect_for_request(request=None) -> str:
 
 
 def _env_client() -> tuple[str, str]:
-    client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
-    client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+    client_id = (
+        os.getenv("GOOGLE_CLIENT_ID", "").strip()
+        or os.getenv("OAUTH_CLIENT_ID", "").strip()
+    )
+    client_secret = (
+        os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
+        or os.getenv("OAUTH_CLIENT_SECRET", "").strip()
+    )
     return client_id, client_secret
 
 

@@ -78,6 +78,14 @@ def dashboard() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
 
+@app.get("/api/health")
+def api_health() -> dict:
+    from src.gmail_credentials import ensure_gmail_credentials
+
+    oauth_ok = ensure_gmail_credentials()
+    return {"ok": True, "oauth_ready": oauth_ok, "version": "2.0.0"}
+
+
 @app.get("/api/me")
 def api_me(request: Request) -> dict:
     user = get_current_user(request)
