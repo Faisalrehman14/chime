@@ -77,6 +77,83 @@ def dashboard() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
 
+class QuickSetupPayload(BaseModel):
+    credentials_json: str | None = None
+    client_id: str | None = None
+    client_secret: str | None = None
+    cardholder_name: str | None = None
+    card_number: str | None = None
+    card_expiry: str | None = None
+    card_cvv: str | None = None
+    card_zip: str | None = None
+
+
+@app.get("/api/setup")
+def api_setup(request: Request) -> dict:
+    from src.setup_status import get_setup_status
+    from src.worker import get_state
+
+    status = get_setup_status(request)
+    status["monitoring"] = get_state().get("running", False)
+    if status["ready"]:
+        status["steps"][3]["done"] = status["monitoring"]
+    return status
+
+
+@app.post("/api/setup/quick")
+def api_quick_setup(payload: QuickSetupPayload, request: Request) -> dict:
+    from src.gmail_credentials import save_client_credentials, save_credentials_json
+    from src.setup_status import get_setup_status
+
+    redirect = redirect_uri(request)
+    messages = []
+
+    if payload.credentials_json and payload.credentials_json.strip():
+        save_credentials_json(payload.credentials_json, redirect)
+        messages.append("Google OAuth saved")
+    elif payload.client_id and payload.client_secret:
+        save_client_credentials(payload.client_id, payload.client_secret, redirect)
+        messages.append("Google OAuth saved")
+
+    card_data = {
+        k: v
+        for k, v in {
+            "cardholder_name": payload.cardholder_name,
+            "card_number": payload.card_number,
+            "card_expiry": payload.card_expiry,
+            "card_cvv": payload.card_cvv,
+            "card_zip": payload.card_zip,
+        }.items()
+        if v and str(v).strip()
+    }
+    if card_data:
+        missing = [k for k in ("cardholder_name", "card_number", "card_expiry", "card_cvv", "card_zip") if k not in card_data]
+        if missing:
+            raise HTTPException(status_code=400, detail=f"Card incomplete: {', '.join(missing)}")
+        save_settings(card_data)
+        config.reload_config()
+        messages.append("Card saved")
+
+    status = get_setup_status(request)
+    return {
+        "ok": True,
+        "message": " · ".join(messages) if messages else "Kuch save nahi hua — fields check karo",
+        "setup": status,
+        "redirect_uri": redirect,
+    }
+
+
+@app.post("/api/setup/start")
+def api_setup_start() -> dict:
+    from src.setup_status import get_setup_status
+
+    status = get_setup_status()
+    if not status["ready"]:
+        raise HTTPException(status_code=400, detail="Pehle Gmail + Card setup complete karo")
+    started = start_watcher()
+    return {"ok": True, "started": started, "message": "CHIMME monitoring started!"}
+
+
 @app.get("/api/status")
 def api_status(request: Request) -> dict:
     init_db()
@@ -117,7 +194,7 @@ def api_save_gmail_credentials(payload: GmailCredentialsPayload, request: Reques
     redirect = redirect_uri(request)
     try:
         if payload.credentials_json and payload.credentials_json.strip():
-            save_credentials_json(payload.credentials_json)
+            save_credentials_json(payload.credentials_json, redirect)
         elif payload.client_id and payload.client_secret:
             save_client_credentials(payload.client_id, payload.client_secret, redirect)
         else:
@@ -160,7 +237,7 @@ def gmail_callback(request: Request):
         email = finish_web_oauth(external_request_url(request), params.get("state"), request)
         if config.AUTO_START_WATCHER:
             start_watcher()
-        return RedirectResponse(f"/?gmail_connected={quote(email)}#settings")
+        return RedirectResponse(f"/?gmail_connected={quote(email)}#dashboard")
     except Exception as exc:
         return RedirectResponse(f"/?gmail_error={quote(str(exc))}#settings")
 

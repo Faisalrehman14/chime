@@ -109,6 +109,87 @@ function renderActivity(items) {
   });
 }
 
+async function loadSetup() {
+  const res = await fetch("/api/setup");
+  const data = await res.json();
+  const box = $("#easy-setup");
+  const progress = $("#setup-progress");
+  if (!box || !progress) return;
+
+  if (data.ready && data.monitoring) {
+    box.classList.add("hidden");
+    return;
+  }
+
+  box.classList.remove("hidden");
+  progress.innerHTML = data.steps.map((s) => `
+    <div class="setup-step ${s.done ? "done" : ""}">
+      <span class="setup-check">${s.done ? "✓" : "○"}</span>
+      <span>${s.label}</span>
+    </div>
+  `).join("");
+
+  const redirectEl = $("#setup-redirect-uri");
+  if (redirectEl && data.redirect_uri) redirectEl.textContent = data.redirect_uri;
+
+  const connectBtn = $("#btn-setup-connect");
+  const startBtn = $("#btn-setup-start");
+  if (connectBtn) {
+    connectBtn.classList.toggle("hidden", !data.steps[0]?.done || data.steps[1]?.done);
+  }
+  if (startBtn) {
+    startBtn.classList.toggle("hidden", !data.ready);
+  }
+}
+
+$("#quick-setup-form")?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const msg = $("#setup-msg");
+  const json = $("#setup-json")?.value.trim();
+  const clientId = $("#setup-client-id")?.value.trim();
+  const clientSecret = $("#setup-client-secret")?.value.trim();
+  const form = e.target;
+  const payload = Object.fromEntries(new FormData(form).entries());
+
+  if (json) payload.credentials_json = json;
+  if (clientId) payload.client_id = clientId;
+  if (clientSecret) payload.client_secret = clientSecret;
+
+  const res = await fetch("/api/setup/quick", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (res.ok) {
+    msg.textContent = data.message;
+    toast(data.message);
+    await loadSetup();
+    await refresh();
+  } else {
+    msg.textContent = data.detail || "Save failed";
+    toast(msg.textContent);
+  }
+});
+
+$("#btn-setup-start")?.addEventListener("click", async () => {
+  const res = await fetch("/api/setup/start", { method: "POST" });
+  const data = await res.json();
+  toast(data.message || (data.ok ? "Started" : "Failed"));
+  await loadSetup();
+  await refresh();
+});
+
+$("#btn-copy-setup-redirect")?.addEventListener("click", async () => {
+  const text = $("#setup-redirect-uri")?.textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("Redirect URI copied!");
+  } catch {
+    toast("Copy: " + text);
+  }
+});
+
 async function loadStatus() {
   const res = await fetch("/api/status");
   const data = await res.json();
@@ -331,16 +412,19 @@ function handleUrlMessages() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("gmail_connected")) {
     toast(`Connected: ${decodeURIComponent(params.get("gmail_connected"))}`);
-    history.replaceState({}, "", "/#settings");
-    document.querySelector('[data-tab="settings"]').click();
+    history.replaceState({}, "", "/#dashboard");
+    document.querySelector('[data-tab="dashboard"]').click();
   }
   if (params.get("gmail_error")) {
     toast(`Connection failed: ${decodeURIComponent(params.get("gmail_error"))}`);
-    history.replaceState({}, "", "/#settings");
-    document.querySelector('[data-tab="settings"]').click();
+    history.replaceState({}, "", "/#dashboard");
+    document.querySelector('[data-tab="dashboard"]').click();
   }
   if (window.location.hash === "#settings") {
     document.querySelector('[data-tab="settings"]').click();
+  }
+  if (window.location.hash === "#dashboard") {
+    document.querySelector('[data-tab="dashboard"]').click();
   }
 }
 
@@ -426,6 +510,7 @@ $("#settings-form").addEventListener("submit", async (e) => {
 
 async function refresh() {
   await loadStatus();
+  await loadSetup();
   await loadRecent();
 }
 

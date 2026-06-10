@@ -67,6 +67,71 @@
       </header>
 
       <section id="tab-dashboard" class="view active">
+        <article id="easy-setup" class="card setup-hero hidden">
+          <div class="card-head">
+            <h3>Quick Setup — 2 minutes</h3>
+            <span class="card-sub">Bas yeh karo, baqi CHIMME khud karega</span>
+          </div>
+          <div id="setup-progress" class="setup-progress"></div>
+
+          <details class="setup-help" open>
+            <summary>Google se JSON kaise lo? (1 dafa)</summary>
+            <ol class="help-steps">
+              <li><a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noopener">Gmail API Enable</a> karo</li>
+              <li><a href="https://console.cloud.google.com/auth/audience" target="_blank" rel="noopener">OAuth consent</a> → External → apna email test user mein add</li>
+              <li><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Credentials</a> → Create OAuth client → Web application</li>
+              <li>Redirect URI: <code id="setup-redirect-uri">…</code> <button type="button" id="btn-copy-setup-redirect" class="btn btn-outline btn-sm">Copy</button></li>
+              <li>Create ke baad <strong>Download JSON</strong> → neeche paste karo</li>
+            </ol>
+          </details>
+
+          <form id="quick-setup-form" class="quick-setup-form">
+            <label class="field field-wide">
+              <span>Google OAuth JSON (paste poora file)</span>
+              <textarea id="setup-json" rows="4" placeholder='{"web":{"client_id":"...","client_secret":"..."}}'></textarea>
+            </label>
+            <p class="field-help center">ya alag alag:</p>
+            <div class="form-grid">
+              <label class="field">
+                <span>Client ID</span>
+                <input id="setup-client-id" type="text" placeholder="optional if JSON pasted" autocomplete="off">
+              </label>
+              <label class="field">
+                <span>Client Secret</span>
+                <input id="setup-client-secret" type="password" placeholder="optional if JSON pasted" autocomplete="off">
+              </label>
+            </div>
+            <div class="form-grid">
+              <label class="field">
+                <span>Cardholder Name</span>
+                <input name="cardholder_name" type="text" autocomplete="off">
+              </label>
+              <label class="field">
+                <span>Card Number</span>
+                <input name="card_number" type="text" autocomplete="off">
+              </label>
+              <label class="field">
+                <span>Expiry MM/YY</span>
+                <input name="card_expiry" type="text" placeholder="12/28">
+              </label>
+              <label class="field">
+                <span>CVV</span>
+                <input name="card_cvv" type="text" maxlength="4" autocomplete="off">
+              </label>
+              <label class="field">
+                <span>ZIP</span>
+                <input name="card_zip" type="text">
+              </label>
+            </div>
+            <div class="setup-actions">
+              <button type="submit" class="btn btn-primary">Save Setup</button>
+              <a id="btn-setup-connect" class="btn btn-outline hidden" href="/api/gmail/connect">Connect Gmail</a>
+              <button type="button" id="btn-setup-start" class="btn btn-primary hidden">Start CHIMME</button>
+            </div>
+            <span id="setup-msg" class="save-msg"></span>
+          </form>
+        </article>
+
         <div class="metrics">
           <article class="metric-card metric-primary">
             <div class="metric-top">

@@ -29,7 +29,7 @@ def build_web_client_json(
     }
 
 
-def save_credentials_json(raw: str) -> None:
+def save_credentials_json(raw: str, redirect_uri: str | None = None) -> None:
     data = json.loads(raw.strip())
     if "web" not in data and "installed" in data:
         installed = data["installed"]
@@ -43,6 +43,12 @@ def save_credentials_json(raw: str) -> None:
         }
     if "web" not in data:
         raise ValueError("JSON mein 'web' client hona chahiye")
+
+    if redirect_uri:
+        origin = _origin_from_redirect(redirect_uri)
+        data["web"]["redirect_uris"] = [redirect_uri]
+        data["web"]["javascript_origins"] = [origin]
+
     GMAIL_CREDENTIALS_FILE.parent.mkdir(parents=True, exist_ok=True)
     GMAIL_CREDENTIALS_FILE.write_text(json.dumps(data, indent=2))
 
