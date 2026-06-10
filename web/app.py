@@ -6,10 +6,11 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from src import config
 from src.bootstrap import startup_warnings
-from src.config import GMAIL_CREDENTIALS_FILE, GMAIL_TOKEN_FILE
+from src.config import GMAIL_CREDENTIALS_FILE, GMAIL_TOKEN_FILE, external_request_url
 from src.database import init_db, list_recent, stats, summary
 from src.gmail_oauth import (
     credentials_ready,
@@ -34,6 +35,7 @@ from src.worker import (
 STATIC_DIR = Path(__file__).parent / "static"
 
 app = FastAPI(title="CHIMME", version="1.0.0")
+app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
@@ -155,7 +157,7 @@ def gmail_callback(request: Request):
         return RedirectResponse(f"/?gmail_error={msg}#settings")
 
     try:
-        email = finish_web_oauth(str(request.url), params.get("state"), request)
+        email = finish_web_oauth(external_request_url(request), params.get("state"), request)
         if config.AUTO_START_WATCHER:
             start_watcher()
         return RedirectResponse(f"/?gmail_connected={quote(email)}#settings")

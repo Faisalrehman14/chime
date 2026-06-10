@@ -121,11 +121,33 @@ def resolve_public_base_url(request=None) -> str:
             or ""
         ).split(",")[0].strip()
         proto = (request.headers.get("x-forwarded-proto") or "https").split(",")[0].strip()
+        if IS_CLOUD:
+            proto = "https"
         if host and "0.0.0.0" not in host:
             return f"{proto}://{host}".rstrip("/")
 
     host = WEB_HOST if WEB_HOST not in ("0.0.0.0", "") else "127.0.0.1"
     return f"http://{host}:{WEB_PORT}"
+
+
+def external_request_url(request) -> str:
+    """Callback URL as the browser sees it (fixes Railway http→https)."""
+    if request is None:
+        return ""
+    scheme = (request.headers.get("x-forwarded-proto") or request.url.scheme).split(",")[0].strip()
+    host = (
+        request.headers.get("x-forwarded-host")
+        or request.headers.get("host")
+        or ""
+    ).split(",")[0].strip()
+    if IS_CLOUD or host.endswith(".railway.app"):
+        scheme = "https"
+    path = request.url.path
+    query = request.url.query
+    url = f"{scheme}://{host}{path}"
+    if query:
+        url = f"{url}?{query}"
+    return url
 
 
 def dashboard_url(request=None) -> str:

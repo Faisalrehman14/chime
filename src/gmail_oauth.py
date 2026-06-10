@@ -10,6 +10,8 @@ from src.config import (
     DATA_DIR,
     GMAIL_CREDENTIALS_FILE,
     GMAIL_TOKEN_FILE,
+    IS_CLOUD,
+    external_request_url,
     resolve_public_base_url,
 )
 
@@ -133,7 +135,14 @@ def finish_web_oauth(full_callback_url: str, state: str | None, request=None) ->
 
     flow = _build_flow(request)
     flow.state = state
-    flow.fetch_token(authorization_response=full_callback_url)
+
+    callback_url = full_callback_url
+    if callback_url.startswith("http://") and (
+        IS_CLOUD or "railway.app" in callback_url
+    ):
+        callback_url = "https://" + callback_url[len("http://") :]
+
+    flow.fetch_token(authorization_response=callback_url)
     _save_token(flow.credentials)
 
     if state:
