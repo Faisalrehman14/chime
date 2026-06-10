@@ -1,5 +1,6 @@
 from pathlib import Path
 from urllib.parse import quote
+import json
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, RedirectResponse
@@ -49,6 +50,12 @@ class SettingsUpdate(BaseModel):
     telegram_chat_id: str | None = None
 
 
+class GmailCredentialsPayload(BaseModel):
+    client_id: str | None = None
+    client_secret: str | None = None
+    credentials_json: str | None = None
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     from src.bootstrap import bootstrap_runtime, startup_warnings
@@ -69,7 +76,7 @@ def dashboard() -> FileResponse:
 
 
 @app.get("/api/status")
-def api_status() -> dict:
+def api_status(request: Request) -> dict:
     init_db()
     gmail_email = None
     gmail_ok = False
@@ -89,7 +96,7 @@ def api_status() -> dict:
             "email": gmail_email,
             "credentials_exists": credentials_ready(),
             "token_exists": token_ready(),
-            "redirect_uri": redirect_uri(),
+            "redirect_uri": redirect_uri(request),
         },
         "config": {
             "card_missing": config.validate_card_config(),
@@ -101,15 +108,39 @@ def api_status() -> dict:
     }
 
 
+@app.post("/api/gmail/credentials")
+def api_save_gmail_credentials(payload: GmailCredentialsPayload, request: Request) -> dict:
+    from src.gmail_credentials import save_client_credentials, save_credentials_json
+
+    redirect = redirect_uri(request)
+    try:
+        if payload.credentials_json and payload.credentials_json.strip():
+            save_credentials_json(payload.credentials_json)
+        elif payload.client_id and payload.client_secret:
+            save_client_credentials(payload.client_id, payload.client_secret, redirect)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Client ID + Client Secret paste karo (ya poora JSON)",
+            )
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if config.AUTO_START_WATCHER:
+        start_watcher()
+
+    return {"ok": True, "redirect_uri": redirect, "message": "Gmail OAuth saved — ab Connect Gmail dabao"}
+
+
 @app.get("/api/gmail/connect")
-def api_gmail_connect():
+def api_gmail_connect(request: Request):
     if not credentials_ready():
         raise HTTPException(
             status_code=400,
-            detail="credentials/credentials.json missing. Pehle Google Cloud JSON rakho.",
+            detail="Pehle Settings mein Gmail Client ID & Secret save karo.",
         )
     try:
-        auth_url = start_web_oauth()
+        auth_url = start_web_oauth(request)
         return RedirectResponse(auth_url)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -124,7 +155,9 @@ def gmail_callback(request: Request):
         return RedirectResponse(f"/?gmail_error={msg}#settings")
 
     try:
-        email = finish_web_oauth(str(request.url), params.get("state"))
+        email = finish_web_oauth(str(request.url), params.get("state"), request)
+        if config.AUTO_START_WATCHER:
+            start_watcher()
         return RedirectResponse(f"/?gmail_connected={quote(email)}#settings")
     except Exception as exc:
         return RedirectResponse(f"/?gmail_error={quote(str(exc))}#settings")
@@ -182,11 +215,11 @@ def api_stop() -> dict:
 
 
 @app.get("/api/settings")
-def api_get_settings() -> dict:
+def api_get_settings(request: Request) -> dict:
     settings = get_settings()
     settings["gmail_connected"] = False
     settings["gmail_email"] = None
-    settings["redirect_uri"] = redirect_uri()
+    settings["redirect_uri"] = redirect_uri(request)
     if token_ready():
         try:
             settings["gmail_email"] = get_connected_email()
@@ -198,7 +231,7 @@ def api_get_settings() -> dict:
     settings["chrome_connected"] = get_browser_info().get("connected", False)
     settings["is_cloud"] = config.IS_CLOUD
     settings["public_url"] = config.PUBLIC_BASE_URL or None
-    settings["gmail_redirect_uri"] = redirect_uri()
+    settings["gmail_redirect_uri"] = redirect_uri(request)
     return settings
 
 
@@ -208,13 +241,14 @@ def api_save_settings(payload: SettingsUpdate) -> dict:
     if not data:
         raise HTTPException(status_code=400, detail="No settings provided")
 
-    required = ["cardholder_name", "card_number", "card_expiry", "card_cvv", "card_zip"]
-    missing = [key for key in required if not data.get(key)]
-    if missing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Ye fields zaroori hain: {', '.join(missing)}",
-        )
+    card_fields = ["cardholder_name", "card_number", "card_expiry", "card_cvv", "card_zip"]
+    if any(data.get(key) for key in card_fields):
+        missing = [key for key in card_fields if not data.get(key)]
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Card ke liye ye fields bhi bharo: {', '.join(missing)}",
+            )
 
     save_settings(data)
     return {"ok": True, "settings": get_settings()}

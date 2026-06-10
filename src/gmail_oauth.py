@@ -1,18 +1,21 @@
 import secrets
 import time
-from pathlib import Path
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 
-from src.config import DATA_DIR, GMAIL_CREDENTIALS_FILE, GMAIL_TOKEN_FILE, PUBLIC_BASE_URL, WEB_HOST, WEB_PORT
+from src.config import (
+    DATA_DIR,
+    GMAIL_CREDENTIALS_FILE,
+    GMAIL_TOKEN_FILE,
+    resolve_public_base_url,
+)
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 STATE_FILE = DATA_DIR / "oauth_states.json"
 
-# state -> created_at (memory + file backup)
 _pending_states: dict[str, float] = {}
 STATE_TTL_SECONDS = 600
 
@@ -21,10 +24,8 @@ class GmailNotConnectedError(Exception):
     pass
 
 
-def redirect_uri() -> str:
-    if PUBLIC_BASE_URL:
-        return f"{PUBLIC_BASE_URL.rstrip('/')}/gmail/callback"
-    return f"http://{WEB_HOST}:{WEB_PORT}/gmail/callback"
+def redirect_uri(request=None) -> str:
+    return f"{resolve_public_base_url(request).rstrip('/')}/gmail/callback"
 
 
 def credentials_ready() -> bool:
@@ -46,15 +47,15 @@ def _load_creds() -> Credentials | None:
     return Credentials.from_authorized_user_file(str(GMAIL_TOKEN_FILE), SCOPES)
 
 
-def _build_flow() -> Flow:
+def _build_flow(request=None) -> Flow:
     if not GMAIL_CREDENTIALS_FILE.exists():
         raise FileNotFoundError(
-            "credentials/credentials.json missing. Google Cloud se OAuth JSON rakho."
+            "Gmail OAuth setup incomplete. Settings mein Client ID / Secret save karo."
         )
     return Flow.from_client_secrets_file(
         str(GMAIL_CREDENTIALS_FILE),
         scopes=SCOPES,
-        redirect_uri=redirect_uri(),
+        redirect_uri=redirect_uri(request),
     )
 
 
@@ -100,11 +101,11 @@ def _forget_state(state: str) -> None:
             STATE_FILE.unlink(missing_ok=True)
 
 
-def start_web_oauth() -> str:
+def start_web_oauth(request=None) -> str:
     state = secrets.token_urlsafe(24)
     _remember_state(state)
 
-    flow = _build_flow()
+    flow = _build_flow(request)
     auth_url, _ = flow.authorization_url(
         access_type="offline",
         include_granted_scopes="true",
@@ -114,8 +115,7 @@ def start_web_oauth() -> str:
     return auth_url
 
 
-def finish_web_oauth(full_callback_url: str, state: str | None) -> str:
-    # Already connected (e.g. duplicate callback tab)
+def finish_web_oauth(full_callback_url: str, state: str | None, request=None) -> str:
     if token_ready():
         try:
             email = get_connected_email()
@@ -128,10 +128,10 @@ def finish_web_oauth(full_callback_url: str, state: str | None) -> str:
 
     if not _state_is_valid(state):
         raise ValueError(
-            "OAuth session expired. Settings se dubara Connect Gmail dabao (sirf ek tab)."
+            "OAuth session expired. Dubara Connect Gmail dabao (sirf ek tab)."
         )
 
-    flow = _build_flow()
+    flow = _build_flow(request)
     flow.state = state
     flow.fetch_token(authorization_response=full_callback_url)
     _save_token(flow.credentials)
@@ -172,7 +172,7 @@ def get_connected_email() -> str | None:
 def get_valid_credentials() -> Credentials:
     creds = _load_creds()
     if not creds:
-        raise GmailNotConnectedError("Gmail connect nahi hai. Website se Connect Gmail karo.")
+        raise GmailNotConnectedError("Gmail connect nahi hai. Settings se Connect Gmail karo.")
 
     if not creds.valid:
         if creds.expired and creds.refresh_token:

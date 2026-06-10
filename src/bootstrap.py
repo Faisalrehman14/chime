@@ -48,10 +48,6 @@ def bootstrap_runtime() -> None:
             print(f"[CHIMME] WARN: {msg}", file=sys.stderr)
 
     if IS_CLOUD and not GMAIL_CREDENTIALS_FILE.exists():
-        msg = (
-            "Railway Variables mein GMAIL_CREDENTIALS_JSON set karo "
-            "(Google Cloud OAuth JSON — ek line mein). "
-            "App chalegi; Gmail tab connect hoga jab yeh add karoge."
-        )
+        msg = "Settings → Gmail: Client ID & Secret paste karo, phir Connect Gmail dabao."
         _startup_warnings.append(msg)
-        print(f"[CHIMME] WARN: {msg}", file=sys.stderr)
+        print(f"[CHIMME] INFO: {msg}", file=sys.stderr)

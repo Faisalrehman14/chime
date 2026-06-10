@@ -258,7 +258,7 @@ function updateGmailUi(data) {
   }
 
   if (!data.gmail_credentials_exists) {
-    status.textContent = "Upload credentials.json to enable OAuth";
+    status.textContent = "Step 1: Client ID & Secret save karo";
     status.className = "integration-desc status-bad";
     connectBtn.classList.add("hidden");
     disconnectBtn.classList.add("hidden");
@@ -283,6 +283,48 @@ $("#btn-gmail-disconnect").addEventListener("click", async () => {
   toast("Gmail disconnected");
   await loadSettings();
   await refresh();
+});
+
+$("#btn-save-gmail-creds").addEventListener("click", async () => {
+  const btn = $("#btn-save-gmail-creds");
+  const msg = $("#gmail-creds-msg");
+  const clientId = $("#gmail-client-id").value.trim();
+  const clientSecret = $("#gmail-client-secret").value.trim();
+  if (!clientId || !clientSecret) {
+    toast("Client ID aur Client Secret dono chahiye");
+    return;
+  }
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/gmail/credentials", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
+    });
+    const data = await res.json();
+    if (res.ok) {
+      msg.textContent = "Saved!";
+      toast(data.message || "OAuth saved");
+      if (data.redirect_uri) $("#redirect-uri").textContent = data.redirect_uri;
+      await loadSettings();
+      await refresh();
+    } else {
+      msg.textContent = data.detail || "Save failed";
+      toast(msg.textContent);
+    }
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("#btn-copy-redirect").addEventListener("click", async () => {
+  const text = $("#redirect-uri").textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("Redirect URI copied!");
+  } catch {
+    toast("Copy manually: " + text);
+  }
 });
 
 function handleUrlMessages() {

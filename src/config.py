@@ -100,11 +100,36 @@ UNCLAIMED_QUERY = (
 CLAIMED_QUERY = f'from:{CHIME_SENDER} subject:"Banked! You claimed"'
 
 
-def dashboard_url() -> str:
-    if PUBLIC_BASE_URL:
-        return PUBLIC_BASE_URL
+def resolve_public_base_url(request=None) -> str:
+    """Best public URL for OAuth redirects (Railway-aware)."""
+    explicit = _env("PUBLIC_BASE_URL")
+    if explicit:
+        return explicit.rstrip("/")
+
+    static_url = _env("RAILWAY_STATIC_URL")
+    if static_url:
+        return static_url.rstrip("/") if static_url.startswith("http") else f"https://{static_url}".rstrip("/")
+
+    domain = _env("RAILWAY_PUBLIC_DOMAIN")
+    if domain:
+        return f"https://{domain}".rstrip("/")
+
+    if request is not None:
+        host = (
+            request.headers.get("x-forwarded-host")
+            or request.headers.get("host")
+            or ""
+        ).split(",")[0].strip()
+        proto = (request.headers.get("x-forwarded-proto") or "https").split(",")[0].strip()
+        if host and "0.0.0.0" not in host:
+            return f"{proto}://{host}".rstrip("/")
+
     host = WEB_HOST if WEB_HOST not in ("0.0.0.0", "") else "127.0.0.1"
     return f"http://{host}:{WEB_PORT}"
+
+
+def dashboard_url(request=None) -> str:
+    return resolve_public_base_url(request)
 
 
 def settings_env_path() -> Path:

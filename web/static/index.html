@@ -257,28 +257,64 @@
 
           <article class="card">
             <div class="card-head">
-              <h3>Gmail Integration</h3>
-              <span class="card-sub">Connect your inbox for real-time monitoring</span>
+              <h3>Gmail Setup</h3>
+              <span class="card-sub">3 easy steps — no Railway env vars needed</span>
             </div>
 
-            <div class="integration-box">
-              <div class="integration-status">
-                <div class="integration-icon">@</div>
-                <div>
-                  <p class="integration-title">Google Account</p>
-                  <p id="gmail-setup-status" class="integration-desc">Checking connection…</p>
+            <div id="gmail-wizard" class="setup-wizard">
+              <div class="wizard-step">
+                <div class="step-badge">1</div>
+                <div class="step-body">
+                  <h4>Google OAuth Client</h4>
+                  <p class="field-help">
+                    <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a>
+                    → Create Credentials → <strong>OAuth client ID</strong> → Application type: <strong>Web application</strong>
+                  </p>
+                  <div class="form-grid wizard-grid">
+                    <label class="field">
+                      <span>Client ID</span>
+                      <input id="gmail-client-id" type="text" placeholder="123456.apps.googleusercontent.com" autocomplete="off">
+                    </label>
+                    <label class="field">
+                      <span>Client Secret</span>
+                      <input id="gmail-client-secret" type="password" placeholder="GOCSPX-..." autocomplete="off">
+                    </label>
+                  </div>
+                  <button id="btn-save-gmail-creds" type="button" class="btn btn-primary btn-sm">Save OAuth</button>
+                  <span id="gmail-creds-msg" class="save-msg"></span>
                 </div>
               </div>
-              <div class="integration-actions">
-                <a id="btn-gmail-connect" class="btn btn-primary" href="/api/gmail/connect">Connect Gmail</a>
-                <button id="btn-gmail-disconnect" type="button" class="btn btn-outline hidden">Disconnect</button>
-              </div>
-            </div>
 
-            <div class="help-block">
-              <p>One-click OAuth — no terminal setup required.</p>
-              <p class="help-muted">If OAuth fails, add this redirect URI in Google Cloud Console:</p>
-              <code id="redirect-uri">http://127.0.0.1:8787/gmail/callback</code>
+              <div class="wizard-step">
+                <div class="step-badge">2</div>
+                <div class="step-body">
+                  <h4>Redirect URI (Google Console mein add karo)</h4>
+                  <div class="copy-row">
+                    <code id="redirect-uri">Loading…</code>
+                    <button id="btn-copy-redirect" type="button" class="btn btn-outline btn-sm">Copy</button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="wizard-step">
+                <div class="step-badge">3</div>
+                <div class="step-body">
+                  <h4>Connect Gmail</h4>
+                  <div class="integration-box compact">
+                    <div class="integration-status">
+                      <div class="integration-icon">@</div>
+                      <div>
+                        <p class="integration-title">Google Account</p>
+                        <p id="gmail-setup-status" class="integration-desc">Checking…</p>
+                      </div>
+                    </div>
+                    <div class="integration-actions">
+                      <a id="btn-gmail-connect" class="btn btn-primary" href="/api/gmail/connect">Connect Gmail</a>
+                      <button id="btn-gmail-disconnect" type="button" class="btn btn-outline hidden">Disconnect</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </article>
         </div>
