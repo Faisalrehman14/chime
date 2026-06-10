@@ -156,13 +156,13 @@ def api_status(request: Request, user: dict = Depends(require_user)) -> dict:
 def api_gmail_connect(request: Request):
     from src.gmail_credentials import ensure_gmail_credentials
 
-    if not ensure_gmail_credentials(request):
-        raise HTTPException(status_code=503, detail="Server OAuth not configured.")
     try:
+        if not ensure_gmail_credentials(request):
+            return RedirectResponse("/?gmail_error=OAuth+setup+failed")
         auth_url = start_web_oauth(request)
         return RedirectResponse(auth_url)
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        return RedirectResponse(f"/?gmail_error={quote(str(exc))}")
 
 
 @app.get("/gmail/callback")

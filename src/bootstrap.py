@@ -48,12 +48,9 @@ def bootstrap_runtime() -> None:
             _startup_warnings.append(msg)
             print(f"[CHIMME] WARN: {msg}", file=sys.stderr)
 
-    if not ensure_gmail_credentials():
-        msg = (
-            "Gmail OAuth server-side missing — Railway Variables mein "
-            "GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET set karo (1 dafa)."
-        )
-        _startup_warnings.append(msg)
-        print(f"[CHIMME] INFO: {msg}", file=sys.stderr)
+    if ensure_gmail_credentials():
+        print("[CHIMME] Gmail OAuth ready", file=sys.stderr)
     else:
-        print("[CHIMME] Gmail OAuth ready — user sirf Connect Gmail dabaye", file=sys.stderr)
+        msg = "Gmail OAuth could not initialize"
+        _startup_warnings.append(msg)
+        print(f"[CHIMME] WARN: {msg}", file=sys.stderr)

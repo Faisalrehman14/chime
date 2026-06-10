@@ -77,6 +77,26 @@ def _env_client() -> tuple[str, str]:
     return client_id, client_secret
 
 
+def _load_bundled_credentials() -> tuple[str, str] | None:
+    """Base64 OAuth client shipped with app (not plaintext in repo)."""
+    import base64
+    from pathlib import Path
+
+    b64_path = Path(__file__).parent / "oauth_client.b64"
+    if not b64_path.exists():
+        return None
+    try:
+        data = json.loads(base64.b64decode(b64_path.read_text().strip()))
+        block = data.get("web") or data.get("installed") or {}
+        client_id = (block.get("client_id") or "").strip()
+        client_secret = (block.get("client_secret") or "").strip()
+        if client_id and client_secret:
+            return client_id, client_secret
+    except (json.JSONDecodeError, OSError, ValueError):
+        pass
+    return None
+
+
 def _load_legacy_credentials() -> tuple[str, str] | None:
     legacy = ROOT / "credentials" / "credentials.json"
     if not legacy.exists():
@@ -115,6 +135,10 @@ def ensure_gmail_credentials(request=None) -> bool:
         legacy = _load_legacy_credentials()
         if legacy:
             client_id, client_secret = legacy
+    if not client_id or not client_secret:
+        bundled = _load_bundled_credentials()
+        if bundled:
+            client_id, client_secret = bundled
 
     if client_id and client_secret:
         save_client_credentials(client_id, client_secret, redirect)
