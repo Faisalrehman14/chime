@@ -1,5 +1,8 @@
 const $ = (sel) => document.querySelector(sel);
 
+let currentUser = null;
+let pollTimer = null;
+
 const tabs = document.querySelectorAll(".nav-item");
 const tabSections = document.querySelectorAll(".view");
 
@@ -109,8 +112,33 @@ function renderActivity(items) {
   });
 }
 
+function showLogin(message) {
+  $("#login-screen")?.classList.remove("hidden");
+  $("#app-shell")?.classList.add("hidden");
+  const err = $("#login-error");
+  if (message && err) {
+    err.textContent = message;
+    err.classList.remove("hidden");
+  } else if (err) {
+    err.classList.add("hidden");
+  }
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+}
+
+function showApp() {
+  $("#login-screen")?.classList.add("hidden");
+  $("#app-shell")?.classList.remove("hidden");
+  if (currentUser) {
+    $("#user-email-label").textContent = currentUser.email;
+  }
+}
+
 async function loadSetup() {
   const res = await fetch("/api/setup");
+  if (res.status === 401) return;
   const data = await res.json();
   const box = $("#easy-setup");
   if (!box) return;
@@ -150,6 +178,10 @@ $("#btn-setup-start")?.addEventListener("click", async () => {
 
 async function loadStatus() {
   const res = await fetch("/api/status");
+  if (res.status === 401) {
+    showLogin();
+    return;
+  }
   const data = await res.json();
 
   $("#stat-total-claimed").textContent = fmtMoney(data.summary.total_claimed);
@@ -231,6 +263,7 @@ async function loadStatus() {
 
 async function loadRecent() {
   const res = await fetch("/api/activity?limit=5");
+  if (res.status === 401) return;
   const data = await res.json();
   renderRecent(data.items);
 }
@@ -308,28 +341,52 @@ $("#btn-gmail-disconnect")?.addEventListener("click", async () => {
   await refresh();
 });
 
-async function handleUrlMessages() {
+function handleUrlMessages() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("gmail_connected")) {
     toast(`Connected: ${decodeURIComponent(params.get("gmail_connected"))}`);
-    history.replaceState({}, "", "/#dashboard");
-    document.querySelector('[data-tab="dashboard"]').click();
-    await refresh();
+    history.replaceState({}, "", "/");
   }
   if (params.get("gmail_error")) {
-    toast(`Connection failed: ${decodeURIComponent(params.get("gmail_error"))}`);
-    history.replaceState({}, "", "/#dashboard");
-    document.querySelector('[data-tab="dashboard"]').click();
-  }
-  if (window.location.hash === "#settings") {
-    document.querySelector('[data-tab="settings"]').click();
-  }
-  if (window.location.hash === "#dashboard") {
-    document.querySelector('[data-tab="dashboard"]').click();
+    showLogin(decodeURIComponent(params.get("gmail_error")));
+    history.replaceState({}, "", "/");
   }
 }
 
-handleUrlMessages();
+$("#btn-logout")?.addEventListener("click", async () => {
+  await fetch("/api/logout", { method: "POST" });
+  currentUser = null;
+  showLogin();
+  toast("Logged out");
+});
+
+async function initApp() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("gmail_error")) {
+    handleUrlMessages();
+    return;
+  }
+
+  const meRes = await fetch("/api/me");
+  const me = await meRes.json();
+  if (!me.logged_in) {
+    showLogin();
+    return;
+  }
+
+  currentUser = me.user;
+  showApp();
+  handleUrlMessages();
+  if (params.get("gmail_connected")) {
+    history.replaceState({}, "", "/");
+  }
+  await refresh();
+  if (!pollTimer) {
+    pollTimer = setInterval(refresh, 3000);
+  }
+}
+
+initApp();
 
 $("#btn-check").addEventListener("click", async () => {
   $("#btn-check").disabled = true;
@@ -415,5 +472,3 @@ async function refresh() {
   await loadRecent();
 }
 
-refresh();
-setInterval(refresh, 3000);

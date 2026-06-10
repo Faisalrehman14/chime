@@ -19,8 +19,8 @@ class GmailMessage:
     internal_date: int = 0
 
 
-def get_gmail_service():
-    creds = get_valid_credentials()
+def get_gmail_service(user_id: str):
+    creds = get_valid_credentials(user_id)
     return build("gmail", "v1", credentials=creds)
 
 
@@ -29,15 +29,12 @@ def _decode_part(data: str) -> str:
 
 
 def _extract_all_body(payload: dict) -> str:
-    """Collect HTML + plain text from all MIME parts."""
     chunks: list[str] = []
-    mime_type = payload.get("mimeType", "")
     body = payload.get("body", {})
     data = body.get("data")
 
     if data:
-        decoded = _decode_part(data)
-        chunks.append(decoded)
+        chunks.append(_decode_part(data))
 
     for part in payload.get("parts", []):
         chunks.append(_extract_all_body(part))
@@ -93,8 +90,8 @@ def _sender_matches(payment_sender: str, banked_sender: str) -> bool:
     return left in right or right in left or left[:4] == right[:4]
 
 
-def fetch_banked_confirmations(max_results: int = 30) -> list[BankedConfirmation]:
-    service = get_gmail_service()
+def fetch_banked_confirmations(user_id: str, max_results: int = 30) -> list[BankedConfirmation]:
+    service = get_gmail_service(user_id)
     response = (
         service.users()
         .messages()
@@ -123,16 +120,11 @@ def fetch_banked_confirmations(max_results: int = 30) -> list[BankedConfirmation
     return sorted(confirmations, key=lambda item: item.timestamp)
 
 
-def fetch_banked_timestamps(max_results: int = 30) -> list[int]:
-    return [item.timestamp for item in fetch_banked_confirmations(max_results)]
-
-
 def take_matching_banked(
     banked_pool: list[BankedConfirmation],
     payment_timestamp: int,
     sender_name: str,
 ) -> bool:
-    """Match payment to the next Banked confirmation after it was sent."""
     for i, banked in enumerate(banked_pool):
         if banked.timestamp > payment_timestamp and _sender_matches(sender_name, banked.sender_name):
             banked_pool.pop(i)
@@ -140,8 +132,8 @@ def take_matching_banked(
     return False
 
 
-def fetch_message_by_id(message_id: str) -> GmailMessage:
-    service = get_gmail_service()
+def fetch_message_by_id(user_id: str, message_id: str) -> GmailMessage:
+    service = get_gmail_service(user_id)
     full = (
         service.users()
         .messages()
@@ -151,8 +143,8 @@ def fetch_message_by_id(message_id: str) -> GmailMessage:
     return _message_to_model(full)
 
 
-def fetch_unclaimed_messages(max_results: int = 10) -> list[GmailMessage]:
-    service = get_gmail_service()
+def fetch_unclaimed_messages(user_id: str, max_results: int = 10) -> list[GmailMessage]:
+    service = get_gmail_service(user_id)
     response = (
         service.users()
         .messages()
@@ -171,27 +163,3 @@ def fetch_unclaimed_messages(max_results: int = 10) -> list[GmailMessage]:
         messages.append(_message_to_model(full))
 
     return messages
-
-
-def fetch_recent_chime_subjects(limit: int = 5) -> list[str]:
-    service = get_gmail_service()
-    response = (
-        service.users()
-        .messages()
-        .list(userId="me", q=f"from:{CHIME_SENDER}", maxResults=limit)
-        .execute()
-    )
-    subjects = []
-    for item in response.get("messages", []):
-        meta = (
-            service.users()
-            .messages()
-            .get(userId="me", id=item["id"], format="metadata", metadataHeaders=["Subject"])
-            .execute()
-        )
-        headers = {
-            h["name"].lower(): h["value"]
-            for h in meta["payload"].get("headers", [])
-        }
-        subjects.append(headers.get("subject", ""))
-    return subjects

@@ -12,8 +12,74 @@ def _connect() -> sqlite3.Connection:
     return conn
 
 
+def _migrate_processed_emails(conn: sqlite3.Connection) -> None:
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(processed_emails)")}
+    if "user_id" in cols:
+        return
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS processed_emails_v2 (
+            user_id TEXT NOT NULL,
+            message_id TEXT NOT NULL,
+            subject TEXT NOT NULL,
+            sender_name TEXT,
+            amount REAL,
+            status TEXT NOT NULL,
+            claim_url TEXT,
+            error_message TEXT,
+            processed_at TEXT NOT NULL,
+            PRIMARY KEY (user_id, message_id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO processed_emails_v2
+        (user_id, message_id, subject, sender_name, amount, status, claim_url, error_message, processed_at)
+        SELECT 'legacy', message_id, subject, sender_name, amount, status, claim_url, error_message, processed_at
+        FROM processed_emails
+        """
+    )
+    conn.execute("DROP TABLE processed_emails")
+    conn.execute("ALTER TABLE processed_emails_v2 RENAME TO processed_emails")
+    conn.commit()
+
+
 def init_db() -> None:
     with _connect() as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                google_sub TEXT UNIQUE NOT NULL,
+                email TEXT NOT NULL,
+                name TEXT,
+                monitoring_enabled INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS gmail_tokens (
+                user_id TEXT PRIMARY KEY,
+                token_json TEXT NOT NULL,
+                email TEXT,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_settings (
+                user_id TEXT PRIMARY KEY,
+                settings_json TEXT NOT NULL DEFAULT '{}',
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+            """
+        )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS processed_emails (
@@ -29,14 +95,14 @@ def init_db() -> None:
             """
         )
         conn.commit()
+        _migrate_processed_emails(conn)
 
 
-def is_processed(message_id: str) -> bool:
-    """Skip only successfully handled emails; retry failed/blocked/no_link."""
+def is_processed(user_id: str, message_id: str) -> bool:
     with _connect() as conn:
         row = conn.execute(
-            "SELECT status FROM processed_emails WHERE message_id = ?",
-            (message_id,),
+            "SELECT status FROM processed_emails WHERE user_id = ? AND message_id = ?",
+            (user_id, message_id),
         ).fetchone()
         if not row:
             return False
@@ -45,6 +111,7 @@ def is_processed(message_id: str) -> bool:
 
 def save_result(
     *,
+    user_id: str,
     message_id: str,
     subject: str,
     sender_name: str | None,
@@ -57,10 +124,11 @@ def save_result(
         conn.execute(
             """
             INSERT OR REPLACE INTO processed_emails
-            (message_id, subject, sender_name, amount, status, claim_url, error_message, processed_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (user_id, message_id, subject, sender_name, amount, status, claim_url, error_message, processed_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                user_id,
                 message_id,
                 subject,
                 sender_name,
@@ -74,55 +142,59 @@ def save_result(
         conn.commit()
 
 
-def list_recent(limit: int = 20) -> list[dict[str, Any]]:
+def list_recent(user_id: str, limit: int = 20) -> list[dict[str, Any]]:
     with _connect() as conn:
         rows = conn.execute(
             """
             SELECT message_id, subject, sender_name, amount, status, error_message, processed_at
             FROM processed_emails
+            WHERE user_id = ?
             ORDER BY processed_at DESC
             LIMIT ?
             """,
-            (limit,),
+            (user_id, limit),
         ).fetchall()
         return [dict(row) for row in rows]
 
 
-def stats() -> dict[str, int]:
+def stats(user_id: str) -> dict[str, int]:
     with _connect() as conn:
         rows = conn.execute(
-            "SELECT status, COUNT(*) AS count FROM processed_emails GROUP BY status"
+            "SELECT status, COUNT(*) AS count FROM processed_emails WHERE user_id = ? GROUP BY status",
+            (user_id,),
         ).fetchall()
         return {row["status"]: row["count"] for row in rows}
 
 
-def get_record(message_id: str) -> dict[str, Any] | None:
+def get_record(user_id: str, message_id: str) -> dict[str, Any] | None:
     with _connect() as conn:
         row = conn.execute(
             """
             SELECT message_id, subject, sender_name, amount, status, claim_url,
                    error_message, processed_at
-            FROM processed_emails WHERE message_id = ?
+            FROM processed_emails WHERE user_id = ? AND message_id = ?
             """,
-            (message_id,),
+            (user_id, message_id),
         ).fetchone()
         return dict(row) if row else None
 
 
-def list_retryable() -> list[dict[str, Any]]:
+def list_retryable(user_id: str) -> list[dict[str, Any]]:
     with _connect() as conn:
         rows = conn.execute(
             """
             SELECT message_id, subject, sender_name, amount, status
             FROM processed_emails
-            WHERE status IN ('failed', 'blocked', 'no_link')
+            WHERE user_id = ? AND status IN ('failed', 'blocked', 'no_link')
             ORDER BY processed_at ASC
-            """
+            """,
+            (user_id,),
         ).fetchall()
         return [dict(row) for row in rows]
 
 
 def mark_status(
+    user_id: str,
     message_id: str,
     *,
     status: str,
@@ -130,8 +202,8 @@ def mark_status(
 ) -> bool:
     with _connect() as conn:
         row = conn.execute(
-            "SELECT message_id FROM processed_emails WHERE message_id = ?",
-            (message_id,),
+            "SELECT message_id FROM processed_emails WHERE user_id = ? AND message_id = ?",
+            (user_id, message_id),
         ).fetchone()
         if not row:
             return False
@@ -139,12 +211,13 @@ def mark_status(
             """
             UPDATE processed_emails
             SET status = ?, error_message = ?, processed_at = ?
-            WHERE message_id = ?
+            WHERE user_id = ? AND message_id = ?
             """,
             (
                 status,
                 error_message,
                 datetime.now(timezone.utc).isoformat(),
+                user_id,
                 message_id,
             ),
         )
@@ -152,7 +225,7 @@ def mark_status(
         return True
 
 
-def summary() -> dict[str, float | int]:
+def summary(user_id: str) -> dict[str, float | int]:
     with _connect() as conn:
         row = conn.execute(
             """
@@ -164,7 +237,9 @@ def summary() -> dict[str, float | int]:
                 COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) AS failed_count,
                 COALESCE(SUM(CASE WHEN status = 'blocked' THEN 1 ELSE 0 END), 0) AS blocked_count
             FROM processed_emails
-            """
+            WHERE user_id = ?
+            """,
+            (user_id,),
         ).fetchone()
         return {
             "total": row["total"],

@@ -1,7 +1,17 @@
 import re
 import threading
+from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
+
+_card_override: ContextVar[dict[str, Any] | None] = ContextVar("_card_override", default=None)
+
+
+def _card_value(key: str, env_value: str) -> str:
+    override = _card_override.get()
+    if override and override.get(key):
+        return str(override[key])
+    return env_value
 
 from playwright.sync_api import Frame, Page, TimeoutError as PlaywrightTimeout
 from playwright.sync_api import sync_playwright
@@ -295,14 +305,14 @@ def _fill_card_form(page: Page, month: str, year: str) -> bool:
     for ctx in _all_contexts(page):
         if not filled_number:
             filled_number = _fill_in_context(
-                ctx, number_selectors, CARD_NUMBER.replace(" ", "")
+                ctx, number_selectors, _card_value("card_number", CARD_NUMBER).replace(" ", "")
             )
         _fill_in_context(ctx, name_selectors, CARDHOLDER_NAME)
         if not _fill_in_context(ctx, exp_selectors, f"{month}/{year}"):
             _fill_in_context(ctx, ['input[placeholder*="MM" i]'], month)
             _fill_in_context(ctx, ['input[placeholder*="YY" i]'], year)
-        _fill_in_context(ctx, cvv_selectors, CARD_CVV)
-        _fill_in_context(ctx, zip_selectors, CARD_ZIP)
+        _fill_in_context(ctx, cvv_selectors, _card_value("card_cvv", CARD_CVV))
+        _fill_in_context(ctx, zip_selectors, _card_value("card_zip", CARD_ZIP))
 
     return filled_number
 
@@ -480,14 +490,19 @@ def _claim_on_page(page: Page) -> ClaimResult:
 
     # Path B: Manual card form — fill from Settings/.env
     if _has_card_form(page):
-        if not all([CARD_NUMBER, CARD_EXPIRY, CARD_CVV, CARD_ZIP, CARDHOLDER_NAME]):
+        card_number = _card_value("card_number", CARD_NUMBER)
+        card_expiry = _card_value("card_expiry", CARD_EXPIRY)
+        card_cvv = _card_value("card_cvv", CARD_CVV)
+        card_zip = _card_value("card_zip", CARD_ZIP)
+        card_name = _card_value("cardholder_name", CARDHOLDER_NAME)
+        if not all([card_number, card_expiry, card_cvv, card_zip, card_name]):
             return ClaimResult(
                 success=False,
                 status="failed",
-                message="Card form dikha lekin Settings mein card save nahi — card details bharo",
+                message="Card form dikha lekin card save nahi — Settings mein card add karo",
             )
         try:
-            month, year = _split_expiry(CARD_EXPIRY)
+            month, year = _split_expiry(card_expiry)
         except ValueError as exc:
             return ClaimResult(success=False, status="failed", message=str(exc))
 
@@ -535,9 +550,13 @@ def claim_payment(claim_url: str, *, skip_verify: bool = False) -> ClaimResult:
         return _attempt_modes(claim_url, _claim_on_page)
 
 
-def process_claim_url(claim_url: str) -> ClaimResult:
-    with BROWSER_LOCK:
-        return _attempt_modes(claim_url, _claim_on_page)
+def process_claim_url(claim_url: str, card: dict[str, Any] | None = None) -> ClaimResult:
+    token = _card_override.set(card)
+    try:
+        with BROWSER_LOCK:
+            return _attempt_modes(claim_url, _claim_on_page)
+    finally:
+        _card_override.reset(token)
 
 
 def warmup_browser() -> ClaimResult:

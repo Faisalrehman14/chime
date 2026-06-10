@@ -10,10 +10,18 @@ from src.worker import get_state, run_check, start_watcher, stop_watcher
 console = Console()
 
 
+def _first_user_id() -> str:
+    from src.users import list_monitoring_users
+
+    users = list_monitoring_users()
+    return users[0] if users else "legacy"
+
+
 def show_status() -> None:
     init_db()
-    counts = stats()
-    s = summary()
+    uid = _first_user_id()
+    counts = stats(uid)
+    s = summary(uid)
     table = Table(title="CHIMME Status")
     table.add_column("Status")
     table.add_column("Count", justify="right")
@@ -22,7 +30,7 @@ def show_status() -> None:
     console.print(table)
     console.print(f"Total claimed: ${s['total_claimed']:.2f}")
 
-    recent = list_recent()
+    recent = list_recent(uid)
     if not recent:
         console.print("[dim]No processed emails yet.[/dim]")
         return
@@ -51,7 +59,11 @@ def run_daemon() -> None:
         f"[bold green]CHIMME running[/bold green] — checking every "
         f"{config.CHECK_INTERVAL_SECONDS} second(s)"
     )
-    start_watcher()
+    uid = _first_user_id()
+    if uid != "legacy":
+        start_watcher(uid)
+    else:
+        start_watcher()
     while True:
         time.sleep(1)
 
@@ -114,7 +126,7 @@ if __name__ == "__main__":
 
     command = sys.argv[1] if len(sys.argv) > 1 else "web"
     if command == "once":
-        result = run_check()
+        result = run_check(_first_user_id())
         console.print(result["message"])
     elif command == "watch":
         run_daemon()

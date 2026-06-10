@@ -1,5 +1,7 @@
+import json
 import secrets
 import time
+from pathlib import Path
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
@@ -14,8 +16,21 @@ from src.config import (
     external_request_url,
     resolve_public_base_url,
 )
+from src.users import (
+    delete_gmail_token,
+    load_gmail_token_json,
+    save_gmail_token,
+    upsert_user,
+    user_has_gmail,
+)
 
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+SCOPES = [
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+    "https://www.googleapis.com/auth/userinfo.profile",
+    "https://www.googleapis.com/auth/gmail.readonly",
+]
+
 STATE_FILE = DATA_DIR / "oauth_states.json"
 
 _pending_states: dict[str, float] = {}
@@ -34,16 +49,25 @@ def credentials_ready() -> bool:
     return GMAIL_CREDENTIALS_FILE.exists()
 
 
-def token_ready() -> bool:
+def token_ready(user_id: str | None = None) -> bool:
+    if user_id:
+        return user_has_gmail(user_id)
     return GMAIL_TOKEN_FILE.exists()
 
 
-def _save_token(creds: Credentials) -> None:
+def _save_token_file(creds: Credentials) -> None:
     GMAIL_TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
     GMAIL_TOKEN_FILE.write_text(creds.to_json())
 
 
-def _load_creds() -> Credentials | None:
+def _load_creds_for_user(user_id: str) -> Credentials | None:
+    raw = load_gmail_token_json(user_id)
+    if not raw:
+        return None
+    return Credentials.from_authorized_user_info(json.loads(raw), SCOPES)
+
+
+def _load_legacy_creds() -> Credentials | None:
     if not GMAIL_TOKEN_FILE.exists():
         return None
     return Credentials.from_authorized_user_file(str(GMAIL_TOKEN_FILE), SCOPES)
@@ -51,9 +75,7 @@ def _load_creds() -> Credentials | None:
 
 def _build_flow(request=None) -> Flow:
     if not GMAIL_CREDENTIALS_FILE.exists():
-        raise FileNotFoundError(
-            "Gmail OAuth setup incomplete. Settings mein Client ID / Secret save karo."
-        )
+        raise FileNotFoundError("Gmail OAuth not configured on server.")
     return Flow.from_client_secrets_file(
         str(GMAIL_CREDENTIALS_FILE),
         scopes=SCOPES,
@@ -103,6 +125,15 @@ def _forget_state(state: str) -> None:
             STATE_FILE.unlink(missing_ok=True)
 
 
+def _profile_from_creds(creds: Credentials) -> tuple[str, str, str]:
+    service = build("oauth2", "v2", credentials=creds)
+    info = service.userinfo().get().execute()
+    google_sub = info.get("id") or info.get("sub") or info.get("email", "")
+    email = info.get("email", "")
+    name = info.get("name", "") or email
+    return google_sub, email, name
+
+
 def start_web_oauth(request=None) -> str:
     state = secrets.token_urlsafe(24)
     _remember_state(state)
@@ -117,21 +148,9 @@ def start_web_oauth(request=None) -> str:
     return auth_url
 
 
-def finish_web_oauth(full_callback_url: str, state: str | None, request=None) -> str:
-    if token_ready():
-        try:
-            email = get_connected_email()
-            if email:
-                if state:
-                    _forget_state(state)
-                return email
-        except Exception:
-            pass
-
+def finish_web_oauth(full_callback_url: str, state: str | None, request=None) -> dict:
     if not _state_is_valid(state):
-        raise ValueError(
-            "OAuth session expired. Dubara Connect Gmail dabao (sirf ek tab)."
-        )
+        raise ValueError("OAuth session expired. Dubara Connect with Google dabao.")
 
     flow = _build_flow(request)
     flow.state = state
@@ -143,51 +162,95 @@ def finish_web_oauth(full_callback_url: str, state: str | None, request=None) ->
         callback_url = "https://" + callback_url[len("http://") :]
 
     flow.fetch_token(authorization_response=callback_url)
-    _save_token(flow.credentials)
+    creds = flow.credentials
+    google_sub, email, name = _profile_from_creds(creds)
+    if not email:
+        raise ValueError("Google account email not found.")
+
+    user = upsert_user(google_sub=google_sub, email=email, name=name)
+    save_gmail_token(user["id"], creds.to_json(), email)
+    _migrate_env_card(user["id"])
 
     if state:
         _forget_state(state)
 
-    service = build("gmail", "v1", credentials=flow.credentials)
-    profile = service.users().getProfile(userId="me").execute()
-    return profile.get("emailAddress", "")
+    return user
 
 
-def disconnect() -> None:
-    if GMAIL_TOKEN_FILE.exists():
-        GMAIL_TOKEN_FILE.unlink()
-    _pending_states.clear()
-    if STATE_FILE.exists():
-        STATE_FILE.unlink(missing_ok=True)
+def disconnect(user_id: str) -> None:
+    delete_gmail_token(user_id)
 
 
-def get_connected_email() -> str | None:
-    creds = _load_creds()
+def get_connected_email(user_id: str) -> str | None:
+    creds = _load_creds_for_user(user_id)
     if not creds:
         return None
 
     if not creds.valid:
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
-            _save_token(creds)
+            save_gmail_token(user_id, creds.to_json(), "")
         else:
             return None
 
     service = build("gmail", "v1", credentials=creds)
     profile = service.users().getProfile(userId="me").execute()
-    return profile.get("emailAddress")
+    email = profile.get("emailAddress", "")
+    if email:
+        save_gmail_token(user_id, creds.to_json(), email)
+    return email or None
 
 
-def get_valid_credentials() -> Credentials:
-    creds = _load_creds()
+def get_valid_credentials(user_id: str) -> Credentials:
+    creds = _load_creds_for_user(user_id)
     if not creds:
-        raise GmailNotConnectedError("Gmail connect nahi hai. Settings se Connect Gmail karo.")
+        raise GmailNotConnectedError("Gmail connect nahi hai. Connect with Google dabao.")
 
     if not creds.valid:
         if creds.expired and creds.refresh_token:
             creds.refresh(Request())
-            _save_token(creds)
+            service = build("gmail", "v1", credentials=creds)
+            profile = service.users().getProfile(userId="me").execute()
+            save_gmail_token(user_id, creds.to_json(), profile.get("emailAddress", ""))
         else:
             raise GmailNotConnectedError("Gmail token expire ho gaya. Dubara connect karo.")
 
     return creds
+
+
+def _migrate_env_card(user_id: str) -> None:
+    from src import config
+    from src.users import get_user_settings, save_user_settings
+
+    if get_user_settings(user_id).get("card_number"):
+        return
+    if not config.CARD_NUMBER:
+        return
+    save_user_settings(
+        user_id,
+        {
+            "card_number": config.CARD_NUMBER,
+            "card_expiry": config.CARD_EXPIRY,
+            "card_cvv": config.CARD_CVV,
+            "card_zip": config.CARD_ZIP,
+            "cardholder_name": config.CARDHOLDER_NAME,
+        },
+    )
+
+
+def migrate_legacy_token() -> str | None:
+    """Move single-user token file into first DB user (upgrade path)."""
+    if not GMAIL_TOKEN_FILE.exists():
+        return None
+    creds = _load_legacy_creds()
+    if not creds:
+        return None
+    try:
+        google_sub, email, name = _profile_from_creds(creds)
+        user = upsert_user(google_sub=google_sub, email=email, name=name)
+        save_gmail_token(user["id"], creds.to_json(), email)
+        legacy = Path(GMAIL_TOKEN_FILE)
+        legacy.rename(legacy.with_suffix(".json.migrated"))
+        return user["id"]
+    except Exception:
+        return None

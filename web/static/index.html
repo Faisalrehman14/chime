@@ -10,7 +10,25 @@
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-  <div class="app-shell">
+  <div id="login-screen" class="login-screen">
+    <div class="login-card">
+      <div class="brand-mark login-logo">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 2L3 7v10l9 5 9-5V7l-9-5z" stroke="currentColor" stroke-width="1.5"/>
+        </svg>
+      </div>
+      <h1>CHIMME</h1>
+      <p class="login-tagline">Chime Pay Anyone — auto claim karo</p>
+      <p class="login-desc">Google se sign in karo. Koi setup, JSON, ya API key nahi chahiye.</p>
+      <a href="/api/gmail/connect" class="btn btn-google btn-google-lg">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#4285F4" d="M22 12c0-.68-.06-1.35-.17-2H12v3.77h5.64A5.5 5.5 0 0 1 9.9 16.2l-2.9 2.25A9 9 0 0 0 22 12z"/><path fill="#34A853" d="M12 22a9 9 0 0 0 6.2-2.28l-2.9-2.25A5.5 5.5 0 0 1 12 17.5c-1.6 0-2.96-.86-3.65-2.14l-2.9 2.26A9 9 0 0 0 12 22z"/><path fill="#FBBC05" d="M5.35 14.86A5.5 5.5 0 0 1 5 12c0-.99.26-1.92.72-2.72l-2.9-2.26A9 9 0 0 0 3 12a9 9 0 0 0 1.17 4.4l2.18-2.54z"/><path fill="#EA4335" d="M12 6.5c.87 0 1.65.3 2.27.88l1.7-1.7A8 8 0 0 0 3.99 9.28l2.9 2.26C7.58 10.36 8.74 9.5 12 6.5z"/></svg>
+        Continue with Google
+      </a>
+      <p id="login-error" class="login-error hidden"></p>
+    </div>
+  </div>
+
+  <div id="app-shell" class="app-shell hidden">
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark">
@@ -41,11 +59,13 @@
       </nav>
 
       <div class="sidebar-status">
+        <p id="user-email-label" class="user-email-label">—</p>
         <div class="live-indicator">
           <span id="live-dot" class="live-dot off"></span>
           <span id="watch-badge">Monitoring Off</span>
         </div>
         <p class="sidebar-meta">Poll interval · <span id="interval-label">10</span>s</p>
+        <button id="btn-logout" type="button" class="btn btn-outline btn-sm btn-logout">Log out</button>
       </div>
     </aside>
 
