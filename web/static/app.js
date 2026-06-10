@@ -160,7 +160,12 @@ async function loadStatus() {
 
   const banner = $("#block-banner");
   const browser = data.worker.browser || {};
-  if (browser.blocked) {
+  const warnings = data.config?.startup_warnings || [];
+
+  if (warnings.length) {
+    banner.textContent = warnings[0];
+    banner.classList.remove("hidden");
+  } else if (browser.blocked) {
     const ip = browser.blocked_ip ? ` IP ${browser.blocked_ip}` : "";
     banner.textContent =
       `Cloudflare block${ip}. VPN band karo, open Chrome mein Chime tab rakho, Connect Open Chrome, phir Recheck.`;

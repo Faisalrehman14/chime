@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from src import config
+from src.bootstrap import startup_warnings
 from src.config import GMAIL_CREDENTIALS_FILE, GMAIL_TOKEN_FILE
 from src.database import init_db, list_recent, stats, summary
 from src.gmail_oauth import (
@@ -50,12 +51,16 @@ class SettingsUpdate(BaseModel):
 
 @app.on_event("startup")
 def on_startup() -> None:
-    from src.bootstrap import bootstrap_runtime
+    from src.bootstrap import bootstrap_runtime, startup_warnings
+    from src.gmail_oauth import credentials_ready
 
     bootstrap_runtime()
     init_db()
-    if config.AUTO_START_WATCHER:
+    if config.AUTO_START_WATCHER and credentials_ready():
         start_watcher()
+    elif config.IS_CLOUD and config.AUTO_START_WATCHER and not credentials_ready():
+        for msg in startup_warnings():
+            print(f"[CHIMME] {msg}")
 
 
 @app.get("/")
@@ -91,6 +96,7 @@ def api_status() -> dict:
             "interval_seconds": config.CHECK_INTERVAL_SECONDS,
             "public_url": config.PUBLIC_BASE_URL or None,
             "is_cloud": config.IS_CLOUD,
+            "startup_warnings": startup_warnings(),
         },
     }
 
