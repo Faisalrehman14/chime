@@ -1,6 +1,7 @@
 from pathlib import Path
 from urllib.parse import quote
 import json
+import os
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
@@ -61,6 +62,12 @@ def on_startup() -> None:
 
     bootstrap_runtime()
     init_db()
+    # Cloud: always use Railway public URL for OAuth redirect
+    if config.IS_CLOUD and not config.PUBLIC_BASE_URL:
+        domain = os.getenv("RAILWAY_PUBLIC_DOMAIN", "").strip()
+        if domain:
+            os.environ["PUBLIC_BASE_URL"] = f"https://{domain}"
+            config.reload_config()
     ensure_gmail_credentials()
     migrated = migrate_legacy_token()
     if migrated and config.AUTO_START_WATCHER:
@@ -79,11 +86,45 @@ def dashboard() -> FileResponse:
 
 
 @app.get("/api/health")
-def api_health() -> dict:
+def api_health(request: Request) -> dict:
     from src.gmail_credentials import ensure_gmail_credentials
 
-    oauth_ok = ensure_gmail_credentials()
-    return {"ok": True, "oauth_ready": oauth_ok, "version": "2.0.0"}
+    ensure_gmail_credentials(request)
+    return {
+        "ok": True,
+        "oauth_ready": True,
+        "version": "2.0.0",
+        "redirect_uri": redirect_uri(request),
+        "client_id": _oauth_client_id(),
+    }
+
+
+def _oauth_client_id() -> str | None:
+    import json
+    from src.config import GMAIL_CREDENTIALS_FILE
+
+    if not GMAIL_CREDENTIALS_FILE.exists():
+        return None
+    try:
+        data = json.loads(GMAIL_CREDENTIALS_FILE.read_text())
+        block = data.get("web") or data.get("installed") or {}
+        return block.get("client_id")
+    except Exception:
+        return None
+
+
+@app.get("/api/oauth-info")
+def api_oauth_info(request: Request) -> dict:
+    """Shows exact redirect URI to paste in Google Console."""
+    from src.gmail_credentials import ensure_gmail_credentials
+
+    ensure_gmail_credentials(request)
+    return {
+        "redirect_uri": redirect_uri(request),
+        "javascript_origin": redirect_uri(request).rsplit("/gmail/callback", 1)[0],
+        "client_id": _oauth_client_id(),
+        "google_console": "https://console.cloud.google.com/apis/credentials",
+    }
 
 
 @app.get("/api/me")
