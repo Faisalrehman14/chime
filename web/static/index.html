@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CHIMME — Payment Automation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 2L3 7v10l9 5 9-5V7l-9-5z" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M12 12l9-5M12 12v10M12 12L3 7" stroke="currentColor" stroke-width="1.5"/>
+          </svg>
+        </div>
+        <div>
+          <h1>CHIMME</h1>
+          <p>Payment Automation</p>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-tab="dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+          Dashboard
+        </button>
+        <button class="nav-item" data-tab="activity">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+          Activity
+        </button>
+        <button class="nav-item" data-tab="settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          Settings
+        </button>
+      </nav>
+
+      <div class="sidebar-status">
+        <div class="live-indicator">
+          <span id="live-dot" class="live-dot off"></span>
+          <span id="watch-badge">Monitoring Off</span>
+        </div>
+        <p class="sidebar-meta">Poll interval · <span id="interval-label">10</span>s</p>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div id="block-banner" class="block-banner hidden"></div>
+      <header class="page-header">
+        <div class="page-header-text">
+          <p class="eyebrow">Chime Pay Anyone</p>
+          <h2 id="page-title">Dashboard</h2>
+          <p class="page-desc">Automated Gmail monitoring and instant payment claims</p>
+        </div>
+        <div class="page-actions">
+          <button id="btn-check" class="btn btn-primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+            Check Now
+          </button>
+          <button id="btn-toggle-watch" class="btn btn-outline">Start Monitoring</button>
+        </div>
+      </header>
+
+      <section id="tab-dashboard" class="view active">
+        <div class="metrics">
+          <article class="metric-card metric-primary">
+            <div class="metric-top">
+              <span class="metric-label">Total Claimed</span>
+              <span class="metric-icon">$</span>
+            </div>
+            <strong id="stat-total-claimed" class="metric-value">$0.00</strong>
+          </article>
+          <article class="metric-card">
+            <div class="metric-top">
+              <span class="metric-label">Successful</span>
+              <span class="metric-icon ok">✓</span>
+            </div>
+            <strong id="stat-claimed-count" class="metric-value">0</strong>
+          </article>
+          <article class="metric-card">
+            <div class="metric-top">
+              <span class="metric-label">Failed</span>
+              <span class="metric-icon bad">!</span>
+            </div>
+            <strong id="stat-failed-count" class="metric-value">0</strong>
+          </article>
+          <article class="metric-card">
+            <div class="metric-top">
+              <span class="metric-label">Last Check</span>
+              <span class="metric-icon">⏱</span>
+            </div>
+            <strong id="stat-last-check" class="metric-value metric-value-sm">—</strong>
+          </article>
+        </div>
+
+        <div class="grid-2">
+          <article class="card">
+            <div class="card-head">
+              <h3>System Health</h3>
+              <span class="card-sub">Live service status</span>
+            </div>
+            <div class="health-grid">
+              <div class="health-item">
+                <span class="health-label">Gmail</span>
+                <strong id="gmail-status" class="health-value">Checking…</strong>
+              </div>
+              <div class="health-item">
+                <span class="health-label">Payment Card</span>
+                <strong id="card-status" class="health-value">Checking…</strong>
+              </div>
+              <div class="health-item">
+                <span class="health-label">Monitor</span>
+                <strong id="worker-status" class="health-value">Checking…</strong>
+              </div>
+              <div class="health-item health-item-wide">
+                <span class="health-label">Last Result</span>
+                <strong id="last-result" class="health-value">—</strong>
+              </div>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <h3>Recent Transactions</h3>
+              <span class="card-sub">Latest processed payments</span>
+            </div>
+            <div id="recent-list" class="timeline">
+              <p class="empty-state">Loading activity…</p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="tab-activity" class="view">
+        <article class="card">
+          <div class="card-head card-head-row">
+            <div>
+              <h3>Transaction History</h3>
+              <span class="card-sub">Complete log of all claim attempts</span>
+            </div>
+            <button id="btn-recheck-failed" class="btn btn-outline btn-sm" type="button">
+              Recheck Failed
+            </button>
+          </div>
+          <div class="table-shell">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Sender</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Email Subject</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="activity-table"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section id="tab-settings" class="view">
+        <div class="settings-layout">
+          <article class="card">
+            <div class="card-head">
+              <h3>Payment Method</h3>
+              <span class="card-sub">Debit card used to claim Pay Anyone transfers</span>
+            </div>
+
+            <div class="notice">
+              <strong>Secure entry required.</strong> Browsers block autofill on localhost — enter card details manually, then save.
+            </div>
+
+            <form id="settings-form" class="form" autocomplete="off">
+              <div class="form-grid">
+                <label class="field">
+                  <span>Cardholder Name</span>
+                  <input name="cardholder_name" type="text" placeholder="Full name on card" autocomplete="off">
+                </label>
+                <label class="field">
+                  <span>Card Number</span>
+                  <input name="card_number" type="text" inputmode="numeric" placeholder="•••• •••• •••• ••••" autocomplete="off">
+                  <small id="card-saved-hint" class="field-note"></small>
+                </label>
+                <label class="field">
+                  <span>Expiry</span>
+                  <input name="card_expiry" type="text" placeholder="MM/YY" autocomplete="off">
+                </label>
+                <label class="field">
+                  <span>CVV</span>
+                  <input name="card_cvv" type="text" inputmode="numeric" maxlength="4" placeholder="•••" autocomplete="off">
+                </label>
+                <label class="field">
+                  <span>ZIP Code</span>
+                  <input name="card_zip" type="text" placeholder="10001">
+                </label>
+                <label class="field">
+                  <span>Poll Interval (seconds)</span>
+                  <input name="check_interval_seconds" type="number" min="5" max="3600" value="10">
+                </label>
+                <label class="field">
+                  <span>Browser Mode</span>
+                  <select name="headless">
+                    <option value="false">Visible browser (recommended for Chime)</option>
+                    <option value="true">Headless</option>
+                  </select>
+                </label>
+                <label class="field field-wide" id="local-browser-setup">
+                  <span>Open Chrome (local only)</span>
+                  <p class="field-help">
+                    Chrome 136+ debug ke liye alag CHIMME window chahiye (normal Chrome band nahi hota).
+                    Terminal: <code>./scripts/start-chrome-debug.sh --restart</code>
+                    → usi nayi window mein Chime kholo → <strong>Connect Open Chrome</strong>
+                  </p>
+                  <button id="btn-browser-warmup" class="btn btn-outline btn-sm" type="button">
+                    Connect Open Chrome
+                  </button>
+                  <span id="chrome-connect-status" class="save-msg"></span>
+                </label>
+                <div id="cloud-deploy-note" class="notice hidden">
+                  <strong>Railway / Cloud mode.</strong>
+                  Browser server par headless chalega. Card Settings mein save karo.
+                  Gmail redirect: <code id="gmail-redirect-uri">—</code>
+                </div>
+                <label class="field">
+                  <span>Chime Sender Filter</span>
+                  <input name="chime_sender" type="email" value="alerts@account.chime.com">
+                </label>
+              </div>
+
+              <details class="accordion">
+                <summary>Telegram Notifications</summary>
+                <div class="form-grid">
+                  <label class="field">
+                    <span>Bot Token</span>
+                    <input name="telegram_bot_token" type="password" placeholder="Optional">
+                  </label>
+                  <label class="field">
+                    <span>Chat ID</span>
+                    <input name="telegram_chat_id" type="text" placeholder="Optional">
+                  </label>
+                </div>
+              </details>
+
+              <div class="form-footer">
+                <button type="submit" class="btn btn-primary">Save Configuration</button>
+                <span id="settings-msg" class="save-msg"></span>
+              </div>
+            </form>
+          </article>
+
+          <article class="card">
+            <div class="card-head">
+              <h3>Gmail Integration</h3>
+              <span class="card-sub">Connect your inbox for real-time monitoring</span>
+            </div>
+
+            <div class="integration-box">
+              <div class="integration-status">
+                <div class="integration-icon">@</div>
+                <div>
+                  <p class="integration-title">Google Account</p>
+                  <p id="gmail-setup-status" class="integration-desc">Checking connection…</p>
+                </div>
+              </div>
+              <div class="integration-actions">
+                <a id="btn-gmail-connect" class="btn btn-primary" href="/api/gmail/connect">Connect Gmail</a>
+                <button id="btn-gmail-disconnect" type="button" class="btn btn-outline hidden">Disconnect</button>
+              </div>
+            </div>
+
+            <div class="help-block">
+              <p>One-click OAuth — no terminal setup required.</p>
+              <p class="help-muted">If OAuth fails, add this redirect URI in Google Cloud Console:</p>
+              <code id="redirect-uri">http://127.0.0.1:8787/gmail/callback</code>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="/static/app.js"></script>
+</body>
+</html>

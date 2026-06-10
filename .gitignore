@@ -1,0 +1,10 @@
+.env
+credentials/token.json
+credentials/credentials.json
+data/
+__pycache__/
+*.pyc
+.venv/
+venv/
+playwright-report/
+test-results/

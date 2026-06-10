@@ -1,0 +1,15 @@
+.env
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+.git
+.gitignore
+data/
+credentials/
+playwright-report/
+test-results/
+*.md
+.cursor
+assets/
