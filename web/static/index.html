@@ -68,68 +68,24 @@
 
       <section id="tab-dashboard" class="view active">
         <article id="easy-setup" class="card setup-hero hidden">
-          <div class="card-head">
-            <h3>Quick Setup — 2 minutes</h3>
-            <span class="card-sub">Bas yeh karo, baqi CHIMME khud karega</span>
+          <div class="connect-hero">
+            <div class="connect-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M4 4h16v16H4z"/><path d="M4 4l8 8 8-8"/>
+              </svg>
+            </div>
+            <h3>Connect Gmail — bas itna</h3>
+            <p class="connect-sub">Google login karo, CHIMME Chime payments khud monitor aur claim karega.</p>
+            <p id="setup-gmail-email" class="connect-email hidden"></p>
+            <div class="setup-actions setup-actions-center">
+              <a id="btn-setup-connect" class="btn btn-google" href="/api/gmail/connect">
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#4285F4" d="M22 12c0-.68-.06-1.35-.17-2H12v3.77h5.64A5.5 5.5 0 0 1 9.9 16.2l-2.9 2.25A9 9 0 0 0 22 12z"/><path fill="#34A853" d="M12 22a9 9 0 0 0 6.2-2.28l-2.9-2.25A5.5 5.5 0 0 1 12 17.5c-1.6 0-2.96-.86-3.65-2.14l-2.9 2.26A9 9 0 0 0 12 22z"/><path fill="#FBBC05" d="M5.35 14.86A5.5 5.5 0 0 1 5 12c0-.99.26-1.92.72-2.72l-2.9-2.26A9 9 0 0 0 3 12a9 9 0 0 0 1.17 4.4l2.18-2.54z"/><path fill="#EA4335" d="M12 6.5c.87 0 1.65.3 2.27.88l1.7-1.7A8 8 0 0 0 3.99 9.28l2.9 2.26C7.58 10.36 8.74 9.5 12 6.5z"/></svg>
+                Connect with Google
+              </a>
+              <button type="button" id="btn-setup-start" class="btn btn-primary hidden">Start Monitoring</button>
+            </div>
+            <span id="setup-msg" class="save-msg center"></span>
           </div>
-          <div id="setup-progress" class="setup-progress"></div>
-
-          <details class="setup-help" open>
-            <summary>Google se JSON kaise lo? (1 dafa)</summary>
-            <ol class="help-steps">
-              <li><a href="https://console.cloud.google.com/apis/library/gmail.googleapis.com" target="_blank" rel="noopener">Gmail API Enable</a> karo</li>
-              <li><a href="https://console.cloud.google.com/auth/audience" target="_blank" rel="noopener">OAuth consent</a> → External → apna email test user mein add</li>
-              <li><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Credentials</a> → Create OAuth client → Web application</li>
-              <li>Redirect URI: <code id="setup-redirect-uri">…</code> <button type="button" id="btn-copy-setup-redirect" class="btn btn-outline btn-sm">Copy</button></li>
-              <li>Create ke baad <strong>Download JSON</strong> → neeche paste karo</li>
-            </ol>
-          </details>
-
-          <form id="quick-setup-form" class="quick-setup-form">
-            <label class="field field-wide">
-              <span>Google OAuth JSON (paste poora file)</span>
-              <textarea id="setup-json" rows="4" placeholder='{"web":{"client_id":"...","client_secret":"..."}}'></textarea>
-            </label>
-            <p class="field-help center">ya alag alag:</p>
-            <div class="form-grid">
-              <label class="field">
-                <span>Client ID</span>
-                <input id="setup-client-id" type="text" placeholder="optional if JSON pasted" autocomplete="off">
-              </label>
-              <label class="field">
-                <span>Client Secret</span>
-                <input id="setup-client-secret" type="password" placeholder="optional if JSON pasted" autocomplete="off">
-              </label>
-            </div>
-            <div class="form-grid">
-              <label class="field">
-                <span>Cardholder Name</span>
-                <input name="cardholder_name" type="text" autocomplete="off">
-              </label>
-              <label class="field">
-                <span>Card Number</span>
-                <input name="card_number" type="text" autocomplete="off">
-              </label>
-              <label class="field">
-                <span>Expiry MM/YY</span>
-                <input name="card_expiry" type="text" placeholder="12/28">
-              </label>
-              <label class="field">
-                <span>CVV</span>
-                <input name="card_cvv" type="text" maxlength="4" autocomplete="off">
-              </label>
-              <label class="field">
-                <span>ZIP</span>
-                <input name="card_zip" type="text">
-              </label>
-            </div>
-            <div class="setup-actions">
-              <button type="submit" class="btn btn-primary">Save Setup</button>
-              <a id="btn-setup-connect" class="btn btn-outline hidden" href="/api/gmail/connect">Connect Gmail</a>
-              <button type="button" id="btn-setup-start" class="btn btn-primary hidden">Start CHIMME</button>
-            </div>
-            <span id="setup-msg" class="save-msg"></span>
-          </form>
         </article>
 
         <div class="metrics">
@@ -322,63 +278,20 @@
 
           <article class="card">
             <div class="card-head">
-              <h3>Gmail Setup</h3>
-              <span class="card-sub">3 easy steps — no Railway env vars needed</span>
+              <h3>Gmail</h3>
+              <span class="card-sub">Connect ya disconnect karo</span>
             </div>
-
-            <div id="gmail-wizard" class="setup-wizard">
-              <div class="wizard-step">
-                <div class="step-badge">1</div>
-                <div class="step-body">
-                  <h4>Google OAuth Client</h4>
-                  <p class="field-help">
-                    <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a>
-                    → Create Credentials → <strong>OAuth client ID</strong> → Application type: <strong>Web application</strong>
-                  </p>
-                  <div class="form-grid wizard-grid">
-                    <label class="field">
-                      <span>Client ID</span>
-                      <input id="gmail-client-id" type="text" placeholder="123456.apps.googleusercontent.com" autocomplete="off">
-                    </label>
-                    <label class="field">
-                      <span>Client Secret</span>
-                      <input id="gmail-client-secret" type="password" placeholder="GOCSPX-..." autocomplete="off">
-                    </label>
-                  </div>
-                  <button id="btn-save-gmail-creds" type="button" class="btn btn-primary btn-sm">Save OAuth</button>
-                  <span id="gmail-creds-msg" class="save-msg"></span>
+            <div class="integration-box compact">
+              <div class="integration-status">
+                <div class="integration-icon">@</div>
+                <div>
+                  <p class="integration-title">Google Account</p>
+                  <p id="gmail-setup-status" class="integration-desc">Checking…</p>
                 </div>
               </div>
-
-              <div class="wizard-step">
-                <div class="step-badge">2</div>
-                <div class="step-body">
-                  <h4>Redirect URI (Google Console mein add karo)</h4>
-                  <div class="copy-row">
-                    <code id="redirect-uri">Loading…</code>
-                    <button id="btn-copy-redirect" type="button" class="btn btn-outline btn-sm">Copy</button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="wizard-step">
-                <div class="step-badge">3</div>
-                <div class="step-body">
-                  <h4>Connect Gmail</h4>
-                  <div class="integration-box compact">
-                    <div class="integration-status">
-                      <div class="integration-icon">@</div>
-                      <div>
-                        <p class="integration-title">Google Account</p>
-                        <p id="gmail-setup-status" class="integration-desc">Checking…</p>
-                      </div>
-                    </div>
-                    <div class="integration-actions">
-                      <a id="btn-gmail-connect" class="btn btn-primary" href="/api/gmail/connect">Connect Gmail</a>
-                      <button id="btn-gmail-disconnect" type="button" class="btn btn-outline hidden">Disconnect</button>
-                    </div>
-                  </div>
-                </div>
+              <div class="integration-actions">
+                <a id="btn-gmail-connect" class="btn btn-primary" href="/api/gmail/connect">Connect Gmail</a>
+                <button id="btn-gmail-disconnect" type="button" class="btn btn-outline hidden">Disconnect</button>
               </div>
             </div>
           </article>

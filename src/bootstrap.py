@@ -4,6 +4,7 @@ import os
 import sys
 
 from src.config import DATA_DIR, GMAIL_CREDENTIALS_FILE, IS_CLOUD
+from src.gmail_credentials import ensure_gmail_credentials
 
 _startup_warnings: list[str] = []
 
@@ -47,7 +48,12 @@ def bootstrap_runtime() -> None:
             _startup_warnings.append(msg)
             print(f"[CHIMME] WARN: {msg}", file=sys.stderr)
 
-    if IS_CLOUD and not GMAIL_CREDENTIALS_FILE.exists():
-        msg = "Settings → Gmail: Client ID & Secret paste karo, phir Connect Gmail dabao."
+    if not ensure_gmail_credentials():
+        msg = (
+            "Gmail OAuth server-side missing — Railway Variables mein "
+            "GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET set karo (1 dafa)."
+        )
         _startup_warnings.append(msg)
         print(f"[CHIMME] INFO: {msg}", file=sys.stderr)
+    else:
+        print("[CHIMME] Gmail OAuth ready — user sirf Connect Gmail dabaye", file=sys.stderr)

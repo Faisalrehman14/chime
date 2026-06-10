@@ -134,9 +134,8 @@ def process_once(*, include_retry: bool = True, force_browser: bool = False) -> 
     init_db()
     missing = config.validate_card_config()
     if missing and config.BROWSER_MODE != "existing":
-        msg = f"Missing config: {', '.join(missing)}"
-        notify(msg)
-        return {"ok": False, "message": msg, "processed": 0}
+        # Card optional — saved card in Chrome try hoti hai; sirf warn karo
+        pass
 
     try:
         messages = _collect_messages(include_retry=include_retry)

@@ -113,64 +113,32 @@ async function loadSetup() {
   const res = await fetch("/api/setup");
   const data = await res.json();
   const box = $("#easy-setup");
-  const progress = $("#setup-progress");
-  if (!box || !progress) return;
+  if (!box) return;
 
-  if (data.ready && data.monitoring) {
+  const connected = data.steps?.[0]?.done;
+  const monitoring = data.monitoring;
+
+  if (connected && monitoring) {
     box.classList.add("hidden");
     return;
   }
 
   box.classList.remove("hidden");
-  progress.innerHTML = data.steps.map((s) => `
-    <div class="setup-step ${s.done ? "done" : ""}">
-      <span class="setup-check">${s.done ? "✓" : "○"}</span>
-      <span>${s.label}</span>
-    </div>
-  `).join("");
-
-  const redirectEl = $("#setup-redirect-uri");
-  if (redirectEl && data.redirect_uri) redirectEl.textContent = data.redirect_uri;
-
+  const emailEl = $("#setup-gmail-email");
   const connectBtn = $("#btn-setup-connect");
   const startBtn = $("#btn-setup-start");
-  if (connectBtn) {
-    connectBtn.classList.toggle("hidden", !data.steps[0]?.done || data.steps[1]?.done);
-  }
-  if (startBtn) {
-    startBtn.classList.toggle("hidden", !data.ready);
+
+  if (connected && data.gmail_email) {
+    emailEl.textContent = `Connected: ${data.gmail_email}`;
+    emailEl.classList.remove("hidden");
+    connectBtn?.classList.add("hidden");
+    startBtn?.classList.remove("hidden");
+  } else {
+    emailEl?.classList.add("hidden");
+    connectBtn?.classList.remove("hidden");
+    startBtn?.classList.add("hidden");
   }
 }
-
-$("#quick-setup-form")?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const msg = $("#setup-msg");
-  const json = $("#setup-json")?.value.trim();
-  const clientId = $("#setup-client-id")?.value.trim();
-  const clientSecret = $("#setup-client-secret")?.value.trim();
-  const form = e.target;
-  const payload = Object.fromEntries(new FormData(form).entries());
-
-  if (json) payload.credentials_json = json;
-  if (clientId) payload.client_id = clientId;
-  if (clientSecret) payload.client_secret = clientSecret;
-
-  const res = await fetch("/api/setup/quick", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  const data = await res.json();
-  if (res.ok) {
-    msg.textContent = data.message;
-    toast(data.message);
-    await loadSetup();
-    await refresh();
-  } else {
-    msg.textContent = data.detail || "Save failed";
-    toast(msg.textContent);
-  }
-});
 
 $("#btn-setup-start")?.addEventListener("click", async () => {
   const res = await fetch("/api/setup/start", { method: "POST" });
@@ -178,16 +146,6 @@ $("#btn-setup-start")?.addEventListener("click", async () => {
   toast(data.message || (data.ok ? "Started" : "Failed"));
   await loadSetup();
   await refresh();
-});
-
-$("#btn-copy-setup-redirect")?.addEventListener("click", async () => {
-  const text = $("#setup-redirect-uri")?.textContent;
-  try {
-    await navigator.clipboard.writeText(text);
-    toast("Redirect URI copied!");
-  } catch {
-    toast("Copy: " + text);
-  }
 });
 
 async function loadStatus() {
@@ -208,19 +166,16 @@ async function loadStatus() {
   if (data.gmail.connected) {
     gmailEl.textContent = data.gmail.email || "Connected";
     gmailEl.className = "health-value status-ok";
-  } else if (data.gmail.credentials_exists) {
-    gmailEl.textContent = "Not connected";
-    gmailEl.className = "health-value status-bad";
   } else {
-    gmailEl.textContent = "Credentials missing";
+    gmailEl.textContent = "Not connected";
     gmailEl.className = "health-value status-bad";
   }
 
   const cardEl = $("#card-status");
   const cardMissing = data.config.card_missing || [];
   if (cardMissing.length) {
-    cardEl.textContent = "Not configured";
-    cardEl.className = "health-value status-bad";
+    cardEl.textContent = "Optional";
+    cardEl.className = "health-value";
   } else {
     cardEl.textContent = "Ready";
     cardEl.className = "health-value status-ok";
@@ -332,19 +287,6 @@ function updateGmailUi(data) {
   const status = $("#gmail-setup-status");
   const connectBtn = $("#btn-gmail-connect");
   const disconnectBtn = $("#btn-gmail-disconnect");
-  const redirect = $("#redirect-uri");
-
-  if (redirect && data.redirect_uri) {
-    redirect.textContent = data.redirect_uri;
-  }
-
-  if (!data.gmail_credentials_exists) {
-    status.textContent = "Step 1: Client ID & Secret save karo";
-    status.className = "integration-desc status-bad";
-    connectBtn.classList.add("hidden");
-    disconnectBtn.classList.add("hidden");
-    return;
-  }
 
   if (data.gmail_connected) {
     status.textContent = `Connected as ${data.gmail_email}`;
@@ -352,68 +294,27 @@ function updateGmailUi(data) {
     connectBtn.classList.add("hidden");
     disconnectBtn.classList.remove("hidden");
   } else {
-    status.textContent = "Not connected — authorize to begin monitoring";
+    status.textContent = "Connect Gmail to start monitoring";
     status.className = "integration-desc status-bad";
     connectBtn.classList.remove("hidden");
     disconnectBtn.classList.add("hidden");
   }
 }
 
-$("#btn-gmail-disconnect").addEventListener("click", async () => {
+$("#btn-gmail-disconnect")?.addEventListener("click", async () => {
   await fetch("/api/gmail/disconnect", { method: "POST" });
   toast("Gmail disconnected");
   await loadSettings();
   await refresh();
 });
 
-$("#btn-save-gmail-creds").addEventListener("click", async () => {
-  const btn = $("#btn-save-gmail-creds");
-  const msg = $("#gmail-creds-msg");
-  const clientId = $("#gmail-client-id").value.trim();
-  const clientSecret = $("#gmail-client-secret").value.trim();
-  if (!clientId || !clientSecret) {
-    toast("Client ID aur Client Secret dono chahiye");
-    return;
-  }
-  btn.disabled = true;
-  try {
-    const res = await fetch("/api/gmail/credentials", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
-    });
-    const data = await res.json();
-    if (res.ok) {
-      msg.textContent = "Saved!";
-      toast(data.message || "OAuth saved");
-      if (data.redirect_uri) $("#redirect-uri").textContent = data.redirect_uri;
-      await loadSettings();
-      await refresh();
-    } else {
-      msg.textContent = data.detail || "Save failed";
-      toast(msg.textContent);
-    }
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-$("#btn-copy-redirect").addEventListener("click", async () => {
-  const text = $("#redirect-uri").textContent;
-  try {
-    await navigator.clipboard.writeText(text);
-    toast("Redirect URI copied!");
-  } catch {
-    toast("Copy manually: " + text);
-  }
-});
-
-function handleUrlMessages() {
+async function handleUrlMessages() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("gmail_connected")) {
     toast(`Connected: ${decodeURIComponent(params.get("gmail_connected"))}`);
     history.replaceState({}, "", "/#dashboard");
     document.querySelector('[data-tab="dashboard"]').click();
+    await refresh();
   }
   if (params.get("gmail_error")) {
     toast(`Connection failed: ${decodeURIComponent(params.get("gmail_error"))}`);

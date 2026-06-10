@@ -65,9 +65,12 @@ def on_startup() -> None:
 
     bootstrap_runtime()
     init_db()
-    if config.AUTO_START_WATCHER and credentials_ready():
+    from src.gmail_credentials import ensure_gmail_credentials
+
+    ensure_gmail_credentials()
+    if config.AUTO_START_WATCHER and token_ready():
         start_watcher()
-    elif config.IS_CLOUD and config.AUTO_START_WATCHER and not credentials_ready():
+    elif config.IS_CLOUD and config.AUTO_START_WATCHER and not token_ready():
         for msg in startup_warnings():
             print(f"[CHIMME] {msg}")
 
@@ -90,14 +93,11 @@ class QuickSetupPayload(BaseModel):
 
 @app.get("/api/setup")
 def api_setup(request: Request) -> dict:
+    from src.gmail_credentials import ensure_gmail_credentials
     from src.setup_status import get_setup_status
-    from src.worker import get_state
 
-    status = get_setup_status(request)
-    status["monitoring"] = get_state().get("running", False)
-    if status["ready"]:
-        status["steps"][3]["done"] = status["monitoring"]
-    return status
+    ensure_gmail_credentials(request)
+    return get_setup_status(request)
 
 
 @app.post("/api/setup/quick")
@@ -149,7 +149,7 @@ def api_setup_start() -> dict:
 
     status = get_setup_status()
     if not status["ready"]:
-        raise HTTPException(status_code=400, detail="Pehle Gmail + Card setup complete karo")
+        raise HTTPException(status_code=400, detail="Pehle Gmail connect karo")
     started = start_watcher()
     return {"ok": True, "started": started, "message": "CHIMME monitoring started!"}
 
@@ -213,10 +213,12 @@ def api_save_gmail_credentials(payload: GmailCredentialsPayload, request: Reques
 
 @app.get("/api/gmail/connect")
 def api_gmail_connect(request: Request):
-    if not credentials_ready():
+    from src.gmail_credentials import ensure_gmail_credentials
+
+    if not ensure_gmail_credentials(request):
         raise HTTPException(
-            status_code=400,
-            detail="Pehle Settings mein Gmail Client ID & Secret save karo.",
+            status_code=503,
+            detail="Gmail OAuth server par configure nahi — admin se contact karo.",
         )
     try:
         auth_url = start_web_oauth(request)
@@ -231,7 +233,7 @@ def gmail_callback(request: Request):
     error = params.get("error")
     if error:
         msg = quote(params.get("error_description", error))
-        return RedirectResponse(f"/?gmail_error={msg}#settings")
+        return RedirectResponse(f"/?gmail_error={msg}#dashboard")
 
     try:
         email = finish_web_oauth(external_request_url(request), params.get("state"), request)
@@ -239,7 +241,7 @@ def gmail_callback(request: Request):
             start_watcher()
         return RedirectResponse(f"/?gmail_connected={quote(email)}#dashboard")
     except Exception as exc:
-        return RedirectResponse(f"/?gmail_error={quote(str(exc))}#settings")
+        return RedirectResponse(f"/?gmail_error={quote(str(exc))}#dashboard")
 
 
 @app.post("/api/gmail/disconnect")

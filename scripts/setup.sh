@@ -24,5 +24,5 @@ echo "Starting CHIMME Chrome (debug)..."
 
 echo ""
 echo "Starting CHIMME web → http://127.0.0.1:8787"
-echo "Dashboard par Quick Setup wizard follow karo"
+echo "Dashboard par Connect with Google dabao — bas!"
 exec python main.py web
